@@ -6,4 +6,4 @@ Before you compile to generate the program, you must have installed ffmpeg2.x an
 
 The command to generate the executable program:
 	
-	gcc main.c videoutis.h videoutils.c -lavcodec -lavformat -lavutil -lswscale -lswresample -lz -lm -lSDL2
+	gcc main.c videoutils.h videoutils.c -lavcodec -lavformat -lavutil -lswscale -lswresample -lz -lm -lSDL2

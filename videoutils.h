@@ -20,7 +20,7 @@ typedef struct VideoPicture {
     AVFrame *pictYUV;
     // uint8_t *data[AV_NUM_DATA_POINTERS];
     // int linesize[AV_NUM_DATA_POINTERS];
-    uint64_t pts;
+    double pts;
     int width, height;
 }VideoPicture;
 
@@ -28,6 +28,10 @@ typedef struct VideoState {
     AVFormatContext *formatCtx;
     int videoStreamIndex, audioStreamIndex;
     double video_clock;
+    double frame_timer;
+    double frame_last_delay;
+    double frame_last_pts;
+    double audio_clock;
 
     AVStream *audio_stm;
     PacketQueue audioq;
