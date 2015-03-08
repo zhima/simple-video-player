@@ -1,9 +1,40 @@
-tutorial-player
+Simple-video-player
 ===============
-This code mostly learned from dranger's An FFmpeg and SDL Tutorial, change a little to adjust SDL2 library, as some APIs in SDL2 is diffrerent from SDL1.x.
+## Introduction
+---
+This program mostly learned form [dranger's An ffmpeg and SDL Tutorial](http://dranger.com/ffmpeg/). The tutorial's code use `SDL1.x` APIs to display video, Some part of tutorial's code is modified to adjust `SDL2` library, as some APIs in `SDL2` is diffrent form `SDL1.x`.
 
-Before you compile to generate the program, you must have installed ffmpeg2.x and SDL2 from source code.
+## Requirements
+---
 
-The command to generate the executable program:
+Before compiling and running this program, you must have installed `ffmpeg2.x` and `SDL2` from source code in your system, otherwise it may occurs some unexpected errors.
+
+## Get Started
+---
+Building command:
+
+	make
+
+Running command:
+
+	./tutorial-sdl2-player <videoPath>
 	
-	gcc main.c videoutils.h videoutils.c -lavcodec -lavformat -lavutil -lswscale -lswresample -lz -lm -lSDL2
+Cleaning command:
+
+	make clean
+	
+
+## Feature
+### Seeking
+use the `up` `down` `left` `right` buttons to seek the video.
+
+up | down | left | right     |
+-- | ---- | ---- | --------- |
++ 60s | - 60s  | - 10s | + 10s |
+
+
+
+## Todo
+- sync the video&audio to external clock
+- play/stop buttons and its functions
+
