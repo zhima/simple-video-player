@@ -1,16 +1,16 @@
-Simple-video-player
+Simple-Video-Player
 ===============
 ## Introduction
----
+
 This program mostly learned form [dranger's An ffmpeg and SDL Tutorial](http://dranger.com/ffmpeg/). The tutorial's code use `SDL1.x` APIs to display video, Some part of tutorial's code is modified to adjust `SDL2` library, as some APIs in `SDL2` is diffrent form `SDL1.x`.
 
 ## Requirements
----
+
 
 Before compiling and running this program, you must have installed `ffmpeg2.x` and `SDL2` from source code in your system, otherwise it may occurs some unexpected errors.
 
 ## Get Started
----
+
 Building command:
 
 	make
@@ -26,11 +26,12 @@ Cleaning command:
 
 ## Feature
 ### Seeking
-use the `up` `down` `left` `right` buttons to seek the video.
+use the `↑` `↓` `←` `→` buttons to seek the video.
 
-up | down | left | right     |
--- | ---- | ---- | --------- |
-+ 60s | - 60s  | - 10s | + 10s |
+- ↑: + 60s
+- ↓: - 60s
+- ←: - 10s
+- →: + 10s
 
 
 
