@@ -56,10 +56,13 @@ typedef struct VideoState {
 
     char filename[1024];
     int quit;
+    int seek_req;
+    int seek_flags;
+    int64_t seek_pos;
 }VideoState;
 
 
-
+AVPacket flush_pkt;
 
 void packet_queue_init(PacketQueue *queue);
 

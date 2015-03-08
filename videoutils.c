@@ -11,7 +11,7 @@ int packet_queue_put(PacketQueue *queue, AVPacket *pkt) {
         return -1;
     }
 
-    if (av_dup_packet(pkt) < 0) {
+    if ((pkt != &flush_pkt) && (av_dup_packet(pkt) < 0)) {
         return -1;
     }
 
@@ -72,6 +72,24 @@ int packet_queue_get(PacketQueue *queue, AVPacket *pkt, int block, int *quit) {
     }
     SDL_UnlockMutex(queue->mutex);
     return ret;
+}
+
+void packet_queue_flush(PacketQueue *q) {
+    AVPacketList *pkt, *pkt1;
+
+    SDL_LockMutex(q->mutex);
+    for(pkt=q->first_pkt; pkt != NULL; pkt=pkt1) {
+        pkt1 = pkt->next;
+        av_free_packet(&pkt->pkt);
+        av_freep(&pkt);
+    }
+
+    q->last_pkt = NULL;
+    q->first_pkt = NULL;
+    q->nb_packets = 0;
+    q->size = 0;
+    SDL_UnlockMutex(q->mutex);
+
 }
 
 

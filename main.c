@@ -52,6 +52,7 @@ int get_buffer(struct AVCodecContext *ctx, AVFrame *pic);
 void release_buffer(struct AVCodecContext *ctx, AVFrame *pic);
 double get_audio_clock(VideoState *vs);
 double synchronize_video(VideoState *vs, AVFrame *src_frame, double pts);
+void stream_seek(VideoState *is, int64_t pos, int rel);
 
 int main (int argc, char *argv[]) {
     if (argc < 2) {
@@ -94,8 +95,9 @@ int main (int argc, char *argv[]) {
     }
     FF_REFRESH_EVENT = FF_QUIT_EVENT + 1;
     FF_ALLOC_EVENT = FF_QUIT_EVENT + 2;
-    VideoState *vs;
 
+    //video state init, flush packet init
+    VideoState *vs;
     vs = av_mallocz(sizeof(VideoState));
     av_strlcpy(vs->filename, argv[1], sizeof(vs->filename));
     vs->pictq_mutex = SDL_CreateMutex();
@@ -105,6 +107,8 @@ int main (int argc, char *argv[]) {
     for (pictq_index = 0; pictq_index < VIDEO_PICTURE_QUEUE_SIZE; pictq_index++) {
         vs->pict_q[pictq_index].pictYUV = NULL;
     }
+    av_init_packet(&flush_pkt);
+    flush_pkt.data= "FLUSH";
 
     schedule_refresh(vs, 40);
 
@@ -117,6 +121,8 @@ int main (int argc, char *argv[]) {
     SDL_Event event;
     SDL_zero(event);
     for(;;) {
+        double incr,pos;
+        incr=pos=0;
         SDL_WaitEvent(&event);
         if (FF_REFRESH_EVENT == event.type) {
                 video_refresh_timer(event.user.data1);
@@ -132,6 +138,33 @@ int main (int argc, char *argv[]) {
                 vs->quit = 1;
                 break;
             }
+        } else if (SDL_KEYDOWN == event.type) {
+            switch(event.key.keysym.sym) {
+                case SDLK_LEFT:
+                    incr = -10.0;
+                    goto do_seek;
+                case SDLK_RIGHT:
+                    incr = 10.0;
+                    goto do_seek;
+                case SDLK_UP:
+                    incr = 60.0;
+                    goto do_seek;
+                case SDLK_DOWN:
+                    incr = -60.0;
+                    goto do_seek;
+                do_seek:
+                    if (global_video_state) {
+                        pos = get_audio_clock(global_video_state);
+                        pos += incr;
+                        stream_seek(global_video_state,
+                                        (int64_t)(pos * AV_TIME_BASE), incr);
+
+                    }
+                    break;
+                default:
+                    break;
+                }
+            
         }
     }
 
@@ -215,6 +248,37 @@ int decode_thread(void *userdata) {
             break;
         }
 
+        if (vs->seek_req) {
+            int stream_index = -1;
+            int64_t seek_target = vs->seek_pos;
+
+            if (vs->videoStreamIndex >= 0) {
+                stream_index = vs->videoStreamIndex;
+            } else if (vs->audioStreamIndex >= 0) {
+                stream_index = vs->audioStreamIndex;
+            }
+
+            if (stream_index >= 0) {
+                seek_target = av_rescale_q(seek_target, AV_TIME_BASE_Q, vs->formatCtx->streams[stream_index]->time_base);
+            }
+
+            if (av_seek_frame(vs->formatCtx, stream_index, seek_target, vs->seek_flags) < 0) {
+                fprintf(stderr, "%s: error while seeking \n", vs->formatCtx->filename);
+            } else {
+                if (vs->audioStreamIndex >= 0) {
+                    packet_queue_flush(&vs->audioq);
+                    packet_queue_put(&vs->audioq, &flush_pkt);
+                }
+
+                if (vs->videoStreamIndex >= 0) {
+                    packet_queue_flush(&vs->videoq);
+                    packet_queue_put(&vs->videoq, &flush_pkt);
+                }
+            }
+
+            vs->seek_req = 0;
+        }
+
         if (vs->audioq.size > MAX_AUDIOQ_SIZE ||
                 vs->videoq.size > MAX_VIDEOQ_SIZE) {
             SDL_Delay(10);
@@ -294,7 +358,7 @@ int queue_picture(VideoState *vs, AVFrame *pFrame, double pts) {
         vp->width != vs->video_stm->codec->width ||
         vp->height != vs->video_stm->codec->height) {
         if (NULL != vp->pictYUV) {
-            av_free(vp->pictYUV);
+            av_frame_free(&(vp->pictYUV));
             vp->pictYUV = NULL;
         }
         vp->pictYUV = av_frame_alloc(); // or av_frame_alloc()
@@ -349,6 +413,10 @@ int video_thread(void *userdata) {
             //means we need to quit getting packets
             break;
         }
+        if (packet->data == flush_pkt.data) {
+            avcodec_flush_buffers(vs->video_stm->codec);
+            continue;
+        }
         pts = 0;
         global_video_pkt_pts = packet->pts;
         avcodec_decode_video2(videoCodecCtx, frame, &got_frame, packet);
@@ -377,7 +445,7 @@ int video_thread(void *userdata) {
         av_free_packet(packet);
 
     }
-    av_free(frame);
+    av_frame_free(&frame);
     SDL_Event event;
     event.type = FF_QUIT_EVENT;
     event.user.data1 = vs;
@@ -591,6 +659,10 @@ int audio_decode_frame(VideoState *vs, uint8_t *audio_buf, int buf_size, double 
         if (packet_queue_get(&vs->audioq, &audio_pkt, 1, &vs->quit) < 0) {
             return -1;
         }
+        if (audio_pkt.data == flush_pkt.data) {
+            avcodec_flush_buffers(vs->audio_stm->codec);
+            continue;
+        }
 
         audio_pkt_data = audio_pkt.data;
         audio_pkt_size = audio_pkt.size;
@@ -680,19 +752,19 @@ void video_refresh_timer(void *userdata) {
                 } else if (diff >= sync_threshold && delay > AV_SYNC_FRAMEDUP_THRESHOLD) {
                     delay = delay + diff;
                 } else if (diff >= sync_threshold) {
-                    delay = 2* delay;
+                    delay = 2 * delay;
                 }
             }
 
             vs->frame_timer += delay;
-            fprintf(stdout, "refresh timer delay:%f, vp pts:%f, vs->frame_timer:%f, ref_clock:%f\n", delay, vp->pts, vs->frame_timer, ref_clock);
+            // fprintf(stdout, "refresh timer delay:%f, vp pts:%f, vs->frame_timer:%f, ref_clock:%f\n", delay, vp->pts, vs->frame_timer, ref_clock);
 
             //compute the real delay
             actual_delay = vs->frame_timer - (double)(av_gettime_relative() / 1000000.0);
             if (actual_delay < 0.010) {
                 actual_delay = 0.010;
             }
-            // fprintf(stdout, "refresh timer actual_delay:%d\n", (int)(actual_delay * 1000 + 0.5));
+            fprintf(stdout, "refresh timer actual_delay:%d\n", (int)(actual_delay * 1000 + 0.5));
             schedule_refresh(vs, (int)(actual_delay * 1000 + 0.5));
 
             // schedule_refresh(vs, 40);
@@ -731,7 +803,7 @@ static void schedule_refresh(VideoState *vs, int delay) {
 
 void clearAtExit(void) {
     if (audioFrame) {
-        av_free(audioFrame);
+        av_frame_free(&audioFrame);
     }
 }
 
@@ -819,4 +891,14 @@ double get_audio_clock(VideoState *vs) {
     return pts;
 
 
+}
+
+
+void stream_seek(VideoState *is, int64_t pos, int rel)
+{
+    if (!is->seek_req) {
+        is->seek_pos = pos;
+        is->seek_flags = rel < 0 ? AVSEEK_FLAG_BACKWARD : 0;
+        is->seek_req = 1;
+    }
 }
