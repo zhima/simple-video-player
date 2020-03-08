@@ -1,4 +1,5 @@
 #include "videoutils.h"
+#include <stdio.h>
 
 void packet_queue_init(PacketQueue *queue) {
     memset(queue, 0, sizeof(PacketQueue));
@@ -6,12 +7,14 @@ void packet_queue_init(PacketQueue *queue) {
     queue->cond = SDL_CreateCond();
 }
 
-int packet_queue_put(PacketQueue *queue, AVPacket *pkt) {
+int packet_queue_put(PacketQueue *queue, const AVPacket *pkt) {
     if (NULL == pkt) {
         return -1;
     }
-
-    if ((pkt != &flush_pkt) && (av_dup_packet(pkt) < 0)) {
+    AVPacket newPkt;
+    av_init_packet(&newPkt);
+    newPkt.data = pkt->data;
+    if ((pkt != &flush_pkt) && av_packet_ref(&newPkt, pkt) < 0) {
         return -1;
     }
 
@@ -19,7 +22,7 @@ int packet_queue_put(PacketQueue *queue, AVPacket *pkt) {
     if (NULL == pktl) {
         return -1;
     }
-    pktl->pkt = *pkt;
+    pktl->pkt = newPkt;
     pktl->next = NULL;
 
     SDL_LockMutex(queue->mutex);
@@ -75,15 +78,14 @@ int packet_queue_get(PacketQueue *queue, AVPacket *pkt, int block, int *quit) {
 }
 
 void packet_queue_flush(PacketQueue *q) {
-    AVPacketList *pkt, *pkt1;
+    AVPacketList *pktList, *npktList;
 
     SDL_LockMutex(q->mutex);
-    for(pkt=q->first_pkt; pkt != NULL; pkt=pkt1) {
-        pkt1 = pkt->next;
-        av_free_packet(&pkt->pkt);
-        av_freep(&pkt);
+    for(pktList=q->first_pkt; pktList != NULL; pktList=npktList) {
+        npktList = pktList->next;
+        av_packet_unref(&(pktList->pkt));
+        av_freep(&pktList);
     }
-
     q->last_pkt = NULL;
     q->first_pkt = NULL;
     q->nb_packets = 0;

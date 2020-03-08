@@ -34,16 +34,17 @@ typedef struct VideoState {
     double audio_clock;
 
     AVStream *audio_stm;
+    AVCodecContext *audioCodecCtx;
     PacketQueue audioq;
     struct SwrContext *swr_ctx;
     uint8_t audio_buf[(AVCODEC_MAX_AUDIO_FRAME_SIZE * 3) / 2];
     unsigned int audio_buf_size;
     unsigned int audio_buf_index;
-    AVPacket audio_pkt;
     uint8_t *audio_pke_data;
     int audio_pkt_size;
 
     AVStream *video_stm;
+    AVCodecContext *videoCodecCtx;
     PacketQueue videoq;
     struct SwsContext *sws_ctx;
     VideoPicture pict_q[VIDEO_PICTURE_QUEUE_SIZE];
@@ -66,10 +67,11 @@ AVPacket flush_pkt;
 
 void packet_queue_init(PacketQueue *queue);
 
-int packet_queue_put(PacketQueue *queue, AVPacket *pkt);
+int packet_queue_put(PacketQueue *queue, const AVPacket *pkt);
 
 int packet_queue_get(PacketQueue *queue, AVPacket *pkt, int block, int *quit);
 
+void packet_queue_flush(PacketQueue *q);
 
 
 

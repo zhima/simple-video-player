@@ -1,7 +1,7 @@
 CC	= gcc
 CFLAGS	= -Wall -g
 LFLAGS	= -L/usr/local/lib
-LIBS	= -lavcodec -lavformat -lavutil -lswscale -lswresample -lz -lm -lSDL2
+LIBS	= -lavcodec -lavformat -lavutil -lswscale -lswresample -lz -lm -lSDL2 -liconv -lbz2
 OBJS	= main.o videoutils.o
 
 TARGET = tutorial-sdl2-player
