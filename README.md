@@ -7,7 +7,7 @@ This program mostly learned form [dranger's An ffmpeg and SDL Tutorial](http://d
 ## Requirements
 
 
-Before compiling and running this program, you must have installed `ffmpeg2.x` and `SDL2` from source code in your system, otherwise it may occurs some unexpected errors.
+Before compiling and running this program, you must have installed `ffmpeg 4.2.x` and `SDL2` from source code in your system, otherwise it may occurs some unexpected errors.
 
 ## Get Started
 
@@ -39,3 +39,16 @@ use the `↑` `↓` `←` `→` buttons to seek the video.
 - sync the video&audio to external clock
 - play/stop buttons and its functions
 
+## API Changes
+
+	PIX_FMT_YUV420P --> AV_PIX_FMT_YUV420P
+	av_dup_packet --> av_packet_ref
+	av_packet_free --> av_packet_unref
+	av_codec_decode_video2/audio4 --> avcodec_send_packet/avcodec_receive_frame
+	av_picture_full --> av_frame_get_buffer
+	
+
+
+### deprecated:
+	get_buffer
+	codecCtx->release_buffer = release_buffer
