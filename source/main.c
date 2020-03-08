@@ -18,6 +18,7 @@
 #define AV_NOSYNC_THRESHOLD 10.0
 #define AV_SYNC_THRESHOLD_MIN 0.04
 #define AV_SYNC_THRESHOLD_MAX 0.1
+/* If a frame duration is longer than this, it will not be duplicated(means add diff to delay, instead to 2 * delay) to compensate AV sync */
 #define AV_SYNC_FRAMEDUP_THRESHOLD 0.1
 
 static uint32_t FF_QUIT_EVENT = 0;
@@ -645,12 +646,7 @@ void audio_callback(void *userdata, Uint8 *stream, int len) {
 int audio_decode_frame(VideoState *vs, uint8_t *audio_buf, int buf_size, double *pts_ptr) {
     static AVPacket packet, *audioPkt = &packet;
     double pts;
-    int n = 0;
-
-    int data_size;
-    data_size = 0;
-
-    int decodeFinished = 0;
+    int data_size = 0;
 
     AVCodecContext *audioCodecCtx = vs->audioCodecCtx;
 
@@ -794,13 +790,16 @@ void video_refresh_timer(void *userdata) {
             diff = vp->pts - ref_clock;
 
             // sync_threshold = (delay > AV_SYNC_THRESHOLD) ? delay : AV_SYNC_THRESHOLD;
+            // min < delay < max, then delay
+            // delay < min, then min
+            // delay > max, then max
             sync_threshold = FFMAX(AV_SYNC_THRESHOLD_MIN, FFMIN(AV_SYNC_THRESHOLD_MAX, delay));
             if (fabs(diff) < AV_NOSYNC_THRESHOLD) {
-                if (diff <= -sync_threshold) {
+                if (diff <= -sync_threshold) { // video play slower than audio, need to get video faster, so the video delay need to be smaller
                     delay = FFMAX(0, delay + diff);
-                } else if (diff >= sync_threshold && delay > AV_SYNC_FRAMEDUP_THRESHOLD) {
+                } else if (diff >= sync_threshold && delay > AV_SYNC_FRAMEDUP_THRESHOLD) {//video faster then audio, longer the delay to make video wait audio, as the delay is too big than normal video fram duration, we use delay+diff instead 2*delay, to in case delay too big
                     delay = delay + diff;
-                } else if (diff >= sync_threshold) {
+                } else if (diff >= sync_threshold) {//video faster than audio, and the delay is not too big, so directly double the delay
                     delay = 2 * delay;
                 }
             }
@@ -810,7 +809,7 @@ void video_refresh_timer(void *userdata) {
 
             //compute the real delay
             actual_delay = vs->frame_timer - (double)(av_gettime_relative() / 1000000.0);
-            if (actual_delay < 0.010) {
+            if (actual_delay < 0.010) { //if delay too small, give it a min value
                 actual_delay = 0.010;
             }
             //fprintf(stdout, "refresh timer actual_delay:%d\n", (int)(actual_delay * 1000 + 0.5));
