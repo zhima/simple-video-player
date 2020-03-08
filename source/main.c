@@ -34,7 +34,6 @@ static SDL_Renderer *renderer = NULL;
 static SDL_Texture *texture = NULL;
 static SDL_mutex *sdlWindow_alloc_mutex = NULL;
 static SDL_cond *sdlWindow_alloc_cond = NULL;
-static uint64_t global_video_pkt_pts = AV_NOPTS_VALUE;
 
 VideoState *global_video_state;
 
@@ -56,7 +55,7 @@ int open_codec_context(VideoState *vs, int *stream_idx, AVCodecContext **dec_ctx
 
 int main (int argc, char *argv[]) {
     if (argc < 2) {
-        fprintf(stderr, "usage:./a.out videoFileName\n");
+        fprintf(stderr, "usage:./tutorial-sdl2-player videoFileName\n");
         return -1;
     }
     if (SDL_Init(SDL_INIT_EVERYTHING) != 0) {
@@ -65,27 +64,8 @@ int main (int argc, char *argv[]) {
     }
     atexit(clearAtExit);
 
-    /*sdlWindow = SDL_CreateWindow("sdl-ffmpeg player",
-         SDL_WINDOWPOS_CENTERED,
-         SDL_WINDOWPOS_CENTERED,
-         640, 480,
-         SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
-     renderer = SDL_CreateRenderer(sdlWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-     if (NULL == renderer) {
-         fprintf(stderr, "SDL_CreateRenderer error:%s\n",SDL_GetError());
-         return -1;
-     }
-     texture = SDL_CreateTexture(renderer,
-         SDL_PIXELFORMAT_YV12,
-         SDL_TEXTUREACCESS_STREAMING,
-         640, 480);
-     if (NULL == texture) {
-         fprintf(stderr, "SDL_CreateTexture error:%s\n",SDL_GetError());
-         return -1;
-    }*/
     sdlWindow_alloc_mutex = SDL_CreateMutex();
     sdlWindow_alloc_cond = SDL_CreateCond();
-
 
     FF_QUIT_EVENT = SDL_RegisterEvents(3);
     if (FF_QUIT_EVENT == ((Uint32) - 1))
@@ -413,6 +393,11 @@ int queue_picture(VideoState *vs, AVFrame *pFrame, double pts) {
         vp->pictYUV->width = videoCodecPar->width;
         vp->pictYUV->height = videoCodecPar->height;
         vp->pictYUV->format = AV_PIX_FMT_YUV420P;
+        /*The following fields must be set on frame before calling this function:
+                format (pixel format for video, sample format for audio)
+                width and height for video
+                nb_samples and channel_layout for audio
+        */
         if (av_frame_get_buffer(vp->pictYUV, 0) < 0) { //Allocate new buffer for frame failed
             av_frame_free(&(vp->pictYUV));
             vp->pictYUV = NULL;
@@ -813,6 +798,7 @@ void video_refresh_timer(void *userdata) {
                 actual_delay = 0.010;
             }
             //fprintf(stdout, "refresh timer actual_delay:%d\n", (int)(actual_delay * 1000 + 0.5));
+            // 根据延时时间刷新视频，从而实现视频同步音频
             schedule_refresh(vs, (int)(actual_delay * 1000 + 0.5));
 
             // schedule_refresh(vs, 40);
